@@ -4,6 +4,21 @@
 
 Six opinionated workflows for planning, review, shipping, browser QA, and engineering retrospectives, adapted from Garry Tan's original `gstack` for Claude Code and rebuilt around Codex's skill system.
 
+## Quick Start
+
+```bash
+git clone https://github.com/AkbarDevop/gstack-codex.git ~/.codex/skills/gstack-codex
+cd ~/.codex/skills/gstack-codex
+./install.sh --self-test
+```
+
+Then restart Codex and use prompts like:
+
+- `Use plan-ceo-review on this feature idea.`
+- `Run review on my current branch.`
+- `Use browse to test the signup flow on localhost:3000.`
+- `Ship this branch if the checks pass.`
+
 ## Without gstack-codex
 
 - The agent stays in one blended mode for everything
@@ -57,6 +72,35 @@ Codex: [navigates, fills forms, captures console/network issues, reports screens
 ```
 
 That is the point of this repo. Explicit gears. Different brain for different work.
+
+## What You Actually Say To Codex
+
+You do not need special syntax, but naming the skill directly is the most reliable path.
+
+### Planning
+
+- `Use plan-ceo-review on this product idea.`
+- `Use plan-eng-review on this implementation plan.`
+
+### Review
+
+- `Run review on my branch before I push.`
+- `Audit this diff with the review workflow.`
+
+### Shipping
+
+- `Ship this branch if the checks pass.`
+- `Push this branch and open the PR.`
+
+### Browser QA
+
+- `Use browse on http://localhost:3000 and test the auth flow.`
+- `Use browse to inspect this docs page and extract the main content.`
+
+### Retrospective
+
+- `Run retro for the last 7 days.`
+- `Run retro compare 14d.`
 
 ## How Codex invocation works
 
@@ -113,6 +157,17 @@ Why this path is recommended:
 
 Restart Codex after install so it picks up the new skills.
 
+## What Happens During Install
+
+`./install.sh` does four things:
+
+1. installs the six skill folders into `~/.codex/skills`
+2. chooses symlinks or copies depending on where you cloned the repo
+3. builds the `browse` binary locally
+4. runs an optional browser smoke test when you pass `--self-test`
+
+If the repo lives under `~/.codex/skills`, symlink mode is the default so upgrades stay clean.
+
 ## Install options
 
 ```bash
@@ -134,6 +189,7 @@ CODEX_HOME=/tmp/codex ./install.sh
 ```bash
 cd ~/.codex/skills/gstack-codex
 git pull
+./verify.sh
 ./install.sh --force --self-test
 ```
 
@@ -194,6 +250,14 @@ git status
 git push
 ```
 
+If you are iterating only on the browser skill:
+
+```bash
+cd browse
+./setup
+bun test
+```
+
 ## Troubleshooting
 
 ### Bun is missing
@@ -243,6 +307,13 @@ The original `gstack` is a strong idea: explicit cognitive modes for planning, r
 - a real install script
 - self-testable browser setup
 - generic default-branch detection for review and shipping flows
+
+## Roadmap
+
+- make `ship` smarter about project-specific validation discovery
+- add more battle-tested review heuristics outside Rails and LLM-heavy apps
+- expand `browse` docs with richer QA recipes
+- keep upstreaming the portable pieces back toward the original `gstack` where it makes sense
 
 ## Upstream
 

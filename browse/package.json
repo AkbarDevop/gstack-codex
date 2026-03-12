@@ -1,0 +1,21 @@
+{
+  "name": "gstack-browse-codex",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "browse": "./dist/browse"
+  },
+  "scripts": {
+    "build": "bun build --compile src/cli.ts --outfile dist/browse",
+    "dev": "bun run src/cli.ts",
+    "server": "bun run src/server.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "diff": "^7.0.0",
+    "playwright": "^1.58.2"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}

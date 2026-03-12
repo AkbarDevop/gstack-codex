@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -e
+
+SKILL_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+cd "$SKILL_DIR"
+mkdir -p dist
+bun install
+bun run build
+
+if [ ! -x "$SKILL_DIR/dist/browse" ]; then
+  echo "browse setup failed: dist/browse was not built" >&2
+  exit 1
+fi
+
+echo "browse ready: $SKILL_DIR/dist/browse"

@@ -184,7 +184,15 @@ What it does:
 3. installs the skills into a clean temporary `CODEX_HOME`
 4. runs a real `browse` smoke test against `https://example.com`
 
-CI runs the same verification on every push and pull request.
+This repo is designed to work without GitHub Actions. `./verify.sh` is the source of truth before you push changes.
+
+Recommended manual ship check:
+
+```bash
+./verify.sh
+git status
+git push
+```
 
 ## Troubleshooting
 

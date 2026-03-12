@@ -1,0 +1,8 @@
+interface:
+  display_name: "Eng Plan Review"
+  short_description: "Architecture and execution review"
+  brand_color: "#0F766E"
+  default_prompt: "Use $plan-eng-review to review this implementation plan for architecture, failure modes, and test coverage."
+
+policy:
+  allow_implicit_invocation: true

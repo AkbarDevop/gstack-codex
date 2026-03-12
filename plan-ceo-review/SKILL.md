@@ -11,14 +11,13 @@ allowed-tools:
   - Grep
   - Glob
   - Bash
-  - AskUserQuestion
 ---
 
 # Mega Plan Review Mode
 
 ## Codex Port Notes
 
-- Codex does not have Claude slash commands. Trigger this skill when the user wants founder-level product/plan review or when the task clearly matches this description.
+- Codex does not use slash commands. Trigger this skill when the user wants founder-level product/plan review or when the task clearly matches this description.
 - If this workflow says `AskUserQuestion`, ask the user directly in a concise plain-text message instead.
 
 ## Philosophy

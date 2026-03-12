@@ -9,14 +9,13 @@ allowed-tools:
   - Read
   - Grep
   - Glob
-  - AskUserQuestion
 ---
 
 # Plan Review Mode
 
 ## Codex Port Notes
 
-- Codex does not have Claude slash commands. Trigger this skill when the user wants engineering-level plan review or when the task clearly matches this description.
+- Codex does not use slash commands. Trigger this skill when the user wants engineering-level plan review or when the task clearly matches this description.
 - If this workflow says `AskUserQuestion`, ask the user directly in a concise plain-text message instead.
 
 Review this plan thoroughly before making any code changes. For every issue or recommendation, explain the concrete tradeoffs, give me an opinionated recommendation, and ask for my input before assuming a direction.

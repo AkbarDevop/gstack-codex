@@ -2,7 +2,9 @@
 name: ship
 version: 1.0.0
 description: |
-  Ship workflow: merge main, run tests, review diff, bump VERSION, update CHANGELOG, commit, push, create PR.
+  Release workflow for Codex. Sync with the default branch, run the project's
+  ship-gate checks, perform a pre-landing review, push the branch, and open a PR
+  without unnecessary back-and-forth.
 allowed-tools:
   - Bash
   - Read
@@ -10,297 +12,179 @@ allowed-tools:
   - Edit
   - Grep
   - Glob
-  - AskUserQuestion
 ---
 
-# Ship: Fully Automated Ship Workflow
+# Ship Workflow
 
-## Codex Port Notes
+Use this workflow when the user says "ship it", "push this branch", "open the PR", or otherwise asks for release-engineer behavior.
 
-- Codex does not have Claude slash commands. Treat direct requests like "ship it", "push this branch", or "open the PR" as invocation.
-- If this workflow says `AskUserQuestion`, ask the user directly in a concise plain-text message instead.
-- When this workflow needs the review checklist, read `~/.codex/skills/review/checklist.md`.
+## Codex Notes
 
-You are running the `/ship` workflow. This is a **non-interactive, fully automated** workflow. Do NOT ask for confirmation at any step. The user said `/ship` which means DO IT. Run straight through and output the PR URL at the end.
+- Codex does not use slash commands. Trigger this workflow by user intent or explicit mention of `ship`.
+- If the workflow needs user input, ask directly in a concise plain-text message.
+- When this workflow needs the review checklist, read the installed `review/checklist.md`, typically `~/.codex/skills/review/checklist.md`.
 
-**Only stop for:**
-- On `main` branch (abort)
-- Merge conflicts that can't be auto-resolved (stop, show conflicts)
-- Test failures (stop, show failures)
-- Pre-landing review finds CRITICAL issues and user chooses to fix (not acknowledge or skip)
-- MINOR or MAJOR version bump needed (ask — see Step 4)
+This workflow should run straight through once the branch is ready. Do not create friction unless the branch is unsafe to ship.
 
-**Never stop for:**
-- Uncommitted changes (always include them)
-- Version bump choice (auto-pick MICRO or PATCH — see Step 4)
-- CHANGELOG content (auto-generate from diff)
-- Commit message approval (auto-commit)
-- Multi-file changesets (auto-split into bisectable commits)
+## Only stop for
 
----
+- Current branch is the default branch
+- Merge conflicts that cannot be cleanly resolved
+- Missing GitHub auth for push or PR creation
+- Required validation fails
+- A critical review issue needs a user decision
+- Version or release semantics are genuinely ambiguous
 
-## Step 1: Pre-flight
+## Never stop for
 
-1. Check the current branch. If on `main`, **abort**: "You're on main. Ship from a feature branch."
+- Uncommitted changes that belong in the PR
+- Small commit-message wording decisions
+- The absence of a version file or changelog in repositories that do not use them
 
-2. Run `git status` (never use `-uall`). Uncommitted changes are always included — no need to ask.
+## Step 1: Discover repository conventions
 
-3. Run `git diff main...HEAD --stat` and `git log main..HEAD --oneline` to understand what's being shipped.
-
----
-
-## Step 2: Merge origin/main (BEFORE tests)
-
-Fetch and merge `origin/main` into the feature branch so tests run against the merged state:
+Determine the default branch in this order:
 
 ```bash
-git fetch origin main && git merge origin/main --no-edit
+gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name'
+git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@'
 ```
 
-**If there are merge conflicts:** Try to auto-resolve if they are simple (VERSION, schema.rb, CHANGELOG ordering). If conflicts are complex or ambiguous, **STOP** and show them.
+If both fail, fall back to `main`.
 
-**If already up to date:** Continue silently.
+Read the local guidance that defines how this repo ships. Prioritize:
 
----
+1. `AGENTS.md`, `CLAUDE.md`, or other repo guidance files
+2. CI config in `.github/workflows/`
+3. `package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, `Makefile`, `justfile`, `Procfile`
+4. Release files such as `VERSION`, `CHANGELOG.md`, or `RELEASE.md`
 
-## Step 3: Run tests (on merged code)
+From those files, infer:
 
-**Do NOT run `RAILS_ENV=test bin/rails db:migrate`** — `bin/test-lane` already calls
-`db:test:prepare` internally, which loads the schema into the correct lane database.
-Running bare test migrations without INSTANCE hits an orphan DB and corrupts structure.sql.
+- Required validation commands for a ship gate
+- Whether lint/build are mandatory alongside tests
+- Whether version bumping or changelog updates are part of the repo's normal release flow
+- Whether prompt/eval suites are mandatory for certain files
 
-Run both test suites in parallel:
+## Step 2: Pre-flight
+
+1. Run `git branch --show-current`. If already on the default branch, abort.
+2. Run `git status --short`.
+3. Fetch the default branch:
 
 ```bash
-bin/test-lane 2>&1 | tee /tmp/ship_tests.txt &
-npm run test 2>&1 | tee /tmp/ship_vitest.txt &
-wait
+git fetch origin <base-branch> --quiet
 ```
 
-After both complete, read the output files and check pass/fail.
-
-**If any test fails:** Show the failures and **STOP**. Do not proceed.
-
-**If all pass:** Continue silently — just note the counts briefly.
-
----
-
-## Step 3.25: Eval Suites (conditional)
-
-Evals are mandatory when prompt-related files change. Skip this step entirely if no prompt files are in the diff.
-
-**1. Check if the diff touches prompt-related files:**
+4. Summarize what is being shipped:
 
 ```bash
-git diff origin/main --name-only
+git diff origin/<base-branch>...HEAD --stat
+git log origin/<base-branch>..HEAD --oneline
 ```
 
-Match against these patterns (from CLAUDE.md):
-- `app/services/*_prompt_builder.rb`
-- `app/services/*_generation_service.rb`, `*_writer_service.rb`, `*_designer_service.rb`
-- `app/services/*_evaluator.rb`, `*_scorer.rb`, `*_classifier_service.rb`, `*_analyzer.rb`
-- `app/services/concerns/*voice*.rb`, `*writing*.rb`, `*prompt*.rb`, `*token*.rb`
-- `app/services/chat_tools/*.rb`, `app/services/x_thread_tools/*.rb`
-- `config/system_prompts/*.txt`
-- `test/evals/**/*` (eval infrastructure changes affect all suites)
+## Step 3: Merge the latest default branch before testing
 
-**If no matches:** Print "No prompt-related files changed — skipping evals." and continue to Step 3.5.
-
-**2. Identify affected eval suites:**
-
-Each eval runner (`test/evals/*_eval_runner.rb`) declares `PROMPT_SOURCE_FILES` listing which source files affect it. Grep these to find which suites match the changed files:
+Merge `origin/<base-branch>` into the current branch so validation runs against the merged state:
 
 ```bash
-grep -l "changed_file_basename" test/evals/*_eval_runner.rb
+git merge origin/<base-branch> --no-edit
 ```
 
-Map runner → test file: `post_generation_eval_runner.rb` → `post_generation_eval_test.rb`.
+If there are merge conflicts:
 
-**Special cases:**
-- Changes to `test/evals/judges/*.rb`, `test/evals/support/*.rb`, or `test/evals/fixtures/` affect ALL suites that use those judges/support files. Check imports in the eval test files to determine which.
-- Changes to `config/system_prompts/*.txt` — grep eval runners for the prompt filename to find affected suites.
-- If unsure which suites are affected, run ALL suites that could plausibly be impacted. Over-testing is better than missing a regression.
+- Auto-resolve only when the resolution is obvious and low-risk
+- Otherwise stop and show the conflicts
 
-**3. Run affected suites at `EVAL_JUDGE_TIER=full`:**
+## Step 4: Run the ship gate
 
-`/ship` is a pre-merge gate, so always use full tier (Sonnet structural + Opus persona judges).
+Run the validation commands required by this repo. Determine them using this precedence:
+
+1. Explicit commands from repo guidance
+2. Commands already enforced in CI
+3. Well-known manifest scripts or build files
+
+Typical candidates:
+
+- `npm test`, `pnpm test`, `bun test`, `yarn test`
+- `npm run lint`, `npm run build`
+- `pytest`, `cargo test`, `go test ./...`, `make test`, `just test`
+
+Rules:
+
+- Run independent commands in parallel when reasonable
+- Do not invent validations the repo clearly does not use
+- Do not skip validations the repo clearly does use
+- If a command fails, stop and show the failure
+
+## Step 4.5: Run evals only when the repo expects them
+
+If repo guidance or file patterns indicate prompt/eval requirements, run the relevant eval suites before shipping.
+
+Use local guidance, CI, and file patterns to decide whether evals are mandatory. If the repo has no eval culture or no prompt-related files changed, skip this step and say so briefly.
+
+## Step 5: Pre-landing review
+
+Run the installed `review` workflow against `origin/<base-branch>`.
+
+If it finds critical issues:
+
+- Present each critical issue separately
+- Recommend the safest option first
+- If the user wants fixes, apply them and re-run the relevant validation
+
+If only informational issues exist, include them in the PR summary and continue.
+
+## Step 6: Release metadata
+
+Only do release bookkeeping when the repository already uses it.
+
+If a managed version file exists, update it using the repo's established versioning style.
+
+If a changelog exists and is maintained manually, update it from the actual diff and commit history.
+
+Do not create a new `VERSION` or `CHANGELOG.md` convention if the repo does not already have one.
+
+If the correct bump level is ambiguous and the repo clearly cares about version semantics, ask the user.
+
+## Step 7: Commit any remaining changes cleanly
+
+If there are uncommitted changes after validation, review, or release bookkeeping:
+
+- Group them into small, coherent commits
+- Keep each commit independently valid
+- Follow the repository's existing commit style when clear
+- Prefer conventional commits when the repo already uses them
+
+Do not rewrite existing branch history unless the user asked for that.
+
+## Step 8: Push
+
+Push the current branch with upstream tracking if needed:
 
 ```bash
-EVAL_JUDGE_TIER=full EVAL_VERBOSE=1 bin/test-lane --eval test/evals/<suite>_eval_test.rb 2>&1 | tee /tmp/ship_evals.txt
+git push -u origin <current-branch>
 ```
 
-If multiple suites need to run, run them sequentially (each needs a test lane). If the first suite fails, stop immediately — don't burn API cost on remaining suites.
+Never force-push as part of this workflow.
 
-**4. Check results:**
+## Step 9: Open the pull request
 
-- **If any eval fails:** Show the failures, the cost dashboard, and **STOP**. Do not proceed.
-- **If all pass:** Note pass counts and cost. Continue to Step 3.5.
+Create a PR with `gh pr create`.
 
-**5. Save eval output** — include eval results and cost dashboard in the PR body (Step 8).
+The PR body should include:
 
-**Tier reference (for context — /ship always uses `full`):**
-| Tier | When | Speed (cached) | Cost |
-|------|------|----------------|------|
-| `fast` (Haiku) | Dev iteration, smoke tests | ~5s (14x faster) | ~$0.07/run |
-| `standard` (Sonnet) | Default dev, `bin/test-lane --eval` | ~17s (4x faster) | ~$0.37/run |
-| `full` (Opus persona) | **`/ship` and pre-merge** | ~72s (baseline) | ~$1.27/run |
+- A concise summary of the shipped changes
+- Validation results
+- Pre-landing review findings, or "No issues found"
+- Notes about evals if they ran
 
----
-
-## Step 3.5: Pre-Landing Review
-
-Review the diff for structural issues that tests don't catch.
-
-1. Read `~/.codex/skills/review/checklist.md`. If the file cannot be read, **STOP** and report the error.
-
-2. Run `git diff origin/main` to get the full diff (scoped to feature changes against the freshly-fetched remote main).
-
-3. Apply the review checklist in two passes:
-   - **Pass 1 (CRITICAL):** SQL & Data Safety, LLM Output Trust Boundary
-   - **Pass 2 (INFORMATIONAL):** All remaining categories
-
-4. **Always output ALL findings** — both critical and informational. The user must see every issue found.
-
-5. Output a summary header: `Pre-Landing Review: N issues (X critical, Y informational)`
-
-6. **If CRITICAL issues found:** For EACH critical issue, use a separate AskUserQuestion with:
-   - The problem (`file:line` + description)
-   - Your recommended fix
-   - Options: A) Fix it now (recommend), B) Acknowledge and ship anyway, C) It's a false positive — skip
-   After resolving all critical issues: if the user chose A (fix) on any issue, apply the recommended fixes, then commit only the fixed files by name (`git add <fixed-files> && git commit -m "fix: apply pre-landing review fixes"`), then **STOP** and tell the user to run `/ship` again to re-test with the fixes applied. If the user chose only B (acknowledge) or C (false positive) on all issues, continue with Step 4.
-
-7. **If only non-critical issues found:** Output them and continue. They will be included in the PR body at Step 8.
-
-8. **If no issues found:** Output `Pre-Landing Review: No issues found.` and continue.
-
-Save the review output — it goes into the PR body in Step 8.
-
----
-
-## Step 4: Version bump (auto-decide)
-
-1. Read the current `VERSION` file (4-digit format: `MAJOR.MINOR.PATCH.MICRO`)
-
-2. **Auto-decide the bump level based on the diff:**
-   - Count lines changed (`git diff origin/main...HEAD --stat | tail -1`)
-   - **MICRO** (4th digit): < 50 lines changed, trivial tweaks, typos, config
-   - **PATCH** (3rd digit): 50+ lines changed, bug fixes, small-medium features
-   - **MINOR** (2nd digit): **ASK the user** — only for major features or significant architectural changes
-   - **MAJOR** (1st digit): **ASK the user** — only for milestones or breaking changes
-
-3. Compute the new version:
-   - Bumping a digit resets all digits to its right to 0
-   - Example: `0.19.1.0` + PATCH → `0.19.2.0`
-
-4. Write the new version to the `VERSION` file.
-
----
-
-## Step 5: CHANGELOG (auto-generate)
-
-1. Read `CHANGELOG.md` header to know the format.
-
-2. Auto-generate the entry from **ALL commits on the branch** (not just recent ones):
-   - Use `git log main..HEAD --oneline` to see every commit being shipped
-   - Use `git diff main...HEAD` to see the full diff against main
-   - The CHANGELOG entry must be comprehensive of ALL changes going into the PR
-   - If existing CHANGELOG entries on the branch already cover some commits, replace them with one unified entry for the new version
-   - Categorize changes into applicable sections:
-     - `### Added` — new features
-     - `### Changed` — changes to existing functionality
-     - `### Fixed` — bug fixes
-     - `### Removed` — removed features
-   - Write concise, descriptive bullet points
-   - Insert after the file header (line 5), dated today
-   - Format: `## [X.Y.Z.W] - YYYY-MM-DD`
-
-**Do NOT ask the user to describe changes.** Infer from the diff and commit history.
-
----
-
-## Step 6: Commit (bisectable chunks)
-
-**Goal:** Create small, logical commits that work well with `git bisect` and help LLMs understand what changed.
-
-1. Analyze the diff and group changes into logical commits. Each commit should represent **one coherent change** — not one file, but one logical unit.
-
-2. **Commit ordering** (earlier commits first):
-   - **Infrastructure:** migrations, config changes, route additions
-   - **Models & services:** new models, services, concerns (with their tests)
-   - **Controllers & views:** controllers, views, JS/React components (with their tests)
-   - **VERSION + CHANGELOG:** always in the final commit
-
-3. **Rules for splitting:**
-   - A model and its test file go in the same commit
-   - A service and its test file go in the same commit
-   - A controller, its views, and its test go in the same commit
-   - Migrations are their own commit (or grouped with the model they support)
-   - Config/route changes can group with the feature they enable
-   - If the total diff is small (< 50 lines across < 4 files), a single commit is fine
-
-4. **Each commit must be independently valid** — no broken imports, no references to code that doesn't exist yet. Order commits so dependencies come first.
-
-5. Compose each commit message:
-   - First line: `<type>: <summary>` (type = feat/fix/chore/refactor/docs)
-   - Body: brief description of what this commit contains
-   - Only the **final commit** (VERSION + CHANGELOG) gets the version tag and co-author trailer:
-
-```bash
-git commit -m "$(cat <<'EOF'
-chore: bump version and changelog (vX.Y.Z.W)
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
-EOF
-)"
-```
-
----
-
-## Step 7: Push
-
-Push to the remote with upstream tracking:
-
-```bash
-git push -u origin <branch-name>
-```
-
----
-
-## Step 8: Create PR
-
-Create a pull request using `gh`:
-
-```bash
-gh pr create --title "<type>: <summary>" --body "$(cat <<'EOF'
-## Summary
-<bullet points from CHANGELOG>
-
-## Pre-Landing Review
-<findings from Step 3.5, or "No issues found.">
-
-## Eval Results
-<If evals ran: suite names, pass/fail counts, cost dashboard summary. If skipped: "No prompt-related files changed — evals skipped.">
-
-## Test plan
-- [x] All Rails tests pass (N runs, 0 failures)
-- [x] All Vitest tests pass (N tests)
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-EOF
-)"
-```
-
-**Output the PR URL** — this should be the final output the user sees.
-
----
+Output the PR URL as the final result.
 
 ## Important Rules
 
-- **Never skip tests.** If tests fail, stop.
-- **Never skip the pre-landing review.** If checklist.md is unreadable, stop.
-- **Never force push.** Use regular `git push` only.
-- **Never ask for confirmation** except for MINOR/MAJOR version bumps and CRITICAL review findings (one AskUserQuestion per critical issue with fix recommendation).
-- **Always use the 4-digit version format** from the VERSION file.
-- **Date format in CHANGELOG:** `YYYY-MM-DD`
-- **Split commits for bisectability** — each commit = one logical change.
-- **The goal is: user says `/ship`, next thing they see is the review + PR URL.**
+- Do not ship from the default branch.
+- Do not skip required validation.
+- Do not skip pre-landing review.
+- Do not invent release conventions that the repo does not already have.
+- The goal is: the user says "ship it" and the next useful thing they see is either a blocker with specifics or a PR URL.

@@ -1,0 +1,8 @@
+interface:
+  display_name: "Browse"
+  short_description: "Fast browser automation for Codex"
+  brand_color: "#2563EB"
+  default_prompt: "Use $browse to inspect this site, click through the flow, and report any UI or console issues."
+
+policy:
+  allow_implicit_invocation: true

@@ -2,8 +2,9 @@
 name: review
 version: 1.0.0
 description: |
-  Pre-landing PR review. Analyzes diff against main for SQL safety, LLM trust
-  boundary violations, conditional side effects, and other structural issues.
+  Pre-landing review workflow for Codex. Analyze the diff against the default
+  branch for structural bugs, trust-boundary issues, race conditions, missing
+  tests, and other problems that often survive CI.
 allowed-tools:
   - Bash
   - Read
@@ -11,74 +12,97 @@ allowed-tools:
   - Write
   - Grep
   - Glob
-  - AskUserQuestion
 ---
 
-# Pre-Landing PR Review
+# Pre-Landing Review
 
-## Codex Port Notes
+Use this workflow when the user asks to review a branch, audit a diff, or run a pre-landing check before pushing or opening a PR.
 
-- Codex does not have Claude slash commands. Treat direct requests like "review this branch", "do a pre-landing review", or "audit this diff" as invocation.
-- If this workflow says `AskUserQuestion`, ask the user directly in a concise plain-text message instead.
-- Read `checklist.md` from this skill directory.
+## Codex Notes
 
-You are running the `/review` workflow. Analyze the current branch's diff against main for structural issues that tests don't catch.
+- Codex does not use slash commands. Trigger this workflow by user intent or explicit mention of `review`.
+- Read `checklist.md` from this skill directory before commenting on the diff.
+- If the workflow needs user input, ask directly in a concise plain-text message.
 
----
+## Step 1: Resolve the base branch
 
-## Step 1: Check branch
+Determine the repository's default branch in this order:
 
-1. Run `git branch --show-current` to get the current branch.
-2. If on `main`, output: **"Nothing to review — you're on main or have no changes against main."** and stop.
-3. Run `git fetch origin main --quiet && git diff origin/main --stat` to check if there's a diff. If no diff, output the same message and stop.
+```bash
+gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name'
+git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@'
+```
 
----
+If both fail, fall back to `main`.
 
-## Step 2: Read the checklist
+Store the result as `<base-branch>`.
+
+## Step 2: Check whether there is anything to review
+
+1. Run `git branch --show-current`.
+2. If the current branch is `<base-branch>`, check whether there are uncommitted changes or commits ahead of `origin/<base-branch>`.
+3. Run:
+
+```bash
+git fetch origin <base-branch> --quiet
+git diff origin/<base-branch> --stat
+```
+
+If there is no diff, output:
+
+```text
+Pre-Landing Review: Nothing to review.
+```
+
+Then stop.
+
+## Step 3: Read the checklist
 
 Read `checklist.md` from this skill directory.
 
-**If the file cannot be read, STOP and report the error.** Do not proceed without the checklist.
+If the file cannot be read, stop and report the error.
 
----
+## Step 4: Get the full diff
 
-## Step 3: Get the diff
-
-Fetch the latest main to avoid false positives from a stale local main:
+Fetch the latest base branch, then read the full diff:
 
 ```bash
-git fetch origin main --quiet
+git fetch origin <base-branch> --quiet
+git diff origin/<base-branch>
 ```
 
-Run `git diff origin/main` to get the full diff. This includes both committed and uncommitted changes against the latest main.
+This includes committed and uncommitted changes against the latest remote base branch.
 
----
+## Step 5: Two-pass review
 
-## Step 4: Two-pass review
+Apply the checklist in two passes:
 
-Apply the checklist against the diff in two passes:
+1. `CRITICAL`: SQL/data safety, race conditions, trust-boundary failures, security-sensitive bugs
+2. `INFORMATIONAL`: The remaining checklist categories
 
-1. **Pass 1 (CRITICAL):** SQL & Data Safety, LLM Output Trust Boundary
-2. **Pass 2 (INFORMATIONAL):** Conditional Side Effects, Magic Numbers & String Coupling, Dead Code & Consistency, LLM Prompt Issues, Test Gaps, View/Frontend
+Follow the checklist output format exactly. Respect the suppressions. Do not flag issues already addressed in the diff.
 
-Follow the output format specified in the checklist. Respect the suppressions — do NOT flag items listed in the "DO NOT flag" section.
+## Step 6: Output findings
 
----
+Always output every real finding.
 
-## Step 5: Output findings
+- If critical issues exist, output them first and ask the user about each critical issue separately:
+  - `A: Fix it now`
+  - `B: Acknowledge and leave it`
+  - `C: False positive`
+- If only informational issues exist, output them and stop.
+- If no issues exist, output:
 
-**Always output ALL findings** — both critical and informational. The user must see every issue.
+```text
+Pre-Landing Review: No issues found.
+```
 
-- If CRITICAL issues found: output all findings, then for EACH critical issue use a separate AskUserQuestion with the problem, your recommended fix, and options (A: Fix it now, B: Acknowledge, C: False positive — skip).
-  After all critical questions are answered, output a summary of what the user chose for each issue. If the user chose A (fix) on any issue, apply the recommended fixes. If only B/C were chosen, no action needed.
-- If only non-critical issues found: output findings. No further action needed.
-- If no issues found: output `Pre-Landing Review: No issues found.`
-
----
+If the user chooses `A` for any critical issue, apply the fix, re-run the minimal relevant validation for the touched files, and summarize what changed.
 
 ## Important Rules
 
-- **Read the FULL diff before commenting.** Do not flag issues already addressed in the diff.
-- **Read-only by default.** Only modify files if the user explicitly chooses "Fix it now" on a critical issue. Never commit, push, or create PRs.
-- **Be terse.** One line problem, one line fix. No preamble.
-- **Only flag real problems.** Skip anything that's fine.
+- Read the full diff before commenting.
+- Be terse. One line for the problem, one line for the fix.
+- Only flag real problems.
+- Default to read-only unless the user explicitly asks you to fix a critical issue.
+- Never commit, push, or open a PR as part of `review`.

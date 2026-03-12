@@ -1,16 +1,53 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "$0")" && pwd)"
+BROWSE_BIN="$SKILL_DIR/dist/browse"
+SKIP_BROWSER_DOWNLOAD="${BROWSE_SKIP_BROWSER_DOWNLOAD:-0}"
+
+if ! command -v bun >/dev/null 2>&1; then
+  echo "browse setup failed: bun is not installed" >&2
+  echo "Install bun from https://bun.sh and rerun ./setup" >&2
+  exit 1
+fi
+
+needs_build=0
+if [[ ! -x "$BROWSE_BIN" ]]; then
+  needs_build=1
+elif [[ -n "$(find "$SKILL_DIR/src" -type f -newer "$BROWSE_BIN" -print -quit 2>/dev/null)" ]]; then
+  needs_build=1
+elif [[ "$SKILL_DIR/package.json" -nt "$BROWSE_BIN" ]]; then
+  needs_build=1
+elif [[ -f "$SKILL_DIR/bun.lock" && "$SKILL_DIR/bun.lock" -nt "$BROWSE_BIN" ]]; then
+  needs_build=1
+fi
 
 cd "$SKILL_DIR"
-mkdir -p dist
-bun install
-bun run build
 
-if [ ! -x "$SKILL_DIR/dist/browse" ]; then
+if [[ ! -d "$SKILL_DIR/node_modules" ]]; then
+  echo "Installing browse dependencies..."
+  bun install
+elif [[ "$needs_build" -eq 1 ]]; then
+  echo "Refreshing browse dependencies..."
+  bun install
+fi
+
+mkdir -p dist
+if [[ "$needs_build" -eq 1 ]]; then
+  echo "Building browse binary..."
+  bun run build
+fi
+
+if [[ ! -x "$BROWSE_BIN" ]]; then
   echo "browse setup failed: dist/browse was not built" >&2
   exit 1
 fi
 
-echo "browse ready: $SKILL_DIR/dist/browse"
+if [[ "$SKIP_BROWSER_DOWNLOAD" != "1" ]]; then
+  echo "Ensuring Chromium is installed for Playwright..."
+  bunx playwright install chromium
+else
+  echo "Skipping Chromium download because BROWSE_SKIP_BROWSER_DOWNLOAD=1"
+fi
+
+echo "browse ready: $BROWSE_BIN"

@@ -1,0 +1,8 @@
+interface:
+  display_name: "Ship"
+  short_description: "Run the release engineer workflow"
+  brand_color: "#EA580C"
+  default_prompt: "Use $ship to run the release workflow on this ready branch and open the PR if validation passes."
+
+policy:
+  allow_implicit_invocation: true

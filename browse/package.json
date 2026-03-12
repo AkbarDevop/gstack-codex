@@ -9,7 +9,9 @@
     "build": "bun build --compile src/cli.ts --outfile dist/browse",
     "dev": "bun run src/cli.ts",
     "server": "bun run src/server.ts",
-    "test": "bun test"
+    "setup": "./setup",
+    "test": "bun test",
+    "test:ci": "./setup && bun test"
   },
   "dependencies": {
     "diff": "^7.0.0",

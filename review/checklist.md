@@ -2,10 +2,10 @@
 
 ## Instructions
 
-Review the `git diff origin/main` output for the issues listed below. Be specific — cite `file:line` and suggest fixes. Skip anything that's fine. Only flag real problems.
+Review the `git diff origin/<base-branch>` output for the issues listed below. Be specific — cite `file:line` and suggest fixes. Skip anything that's fine. Only flag real problems.
 
 **Two-pass review:**
-- **Pass 1 (CRITICAL):** Run SQL & Data Safety and LLM Output Trust Boundary first. These can block `/ship`.
+- **Pass 1 (CRITICAL):** Run SQL & Data Safety and LLM Output Trust Boundary first. These can block `ship`.
 - **Pass 2 (INFORMATIONAL):** Run all remaining categories. These are included in the PR body but do not block.
 
 **Output format:**
@@ -13,7 +13,7 @@ Review the `git diff origin/main` output for the issues listed below. Be specifi
 ```
 Pre-Landing Review: N issues (X critical, Y informational)
 
-**CRITICAL** (blocking /ship):
+**CRITICAL** (blocking `ship`):
 - [file:line] Problem description
   Fix: suggested fix
 
@@ -98,7 +98,7 @@ Be terse. For each issue: one line describing the problem, one line with the fix
 ## Gate Classification
 
 ```
-CRITICAL (blocks /ship):          INFORMATIONAL (in PR body):
+CRITICAL (blocks `ship`):         INFORMATIONAL (in PR body):
 ├─ SQL & Data Safety              ├─ Conditional Side Effects
 ├─ Race Conditions & Concurrency  ├─ Magic Numbers & String Coupling
 └─ LLM Output Trust Boundary      ├─ Dead Code & Consistency

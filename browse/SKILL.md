@@ -19,7 +19,7 @@ allowed-tools:
 
 - This port lives at `~/.codex/skills/browse`.
 - Use the compiled binary via shell commands: `~/.codex/skills/browse/dist/browse`.
-- Codex does not have Claude slash commands. Treat requests to browse a live site, verify UI flows, or QA a deployment as the trigger for this skill.
+- Codex does not use slash commands. Treat requests to browse a live site, verify UI flows, or QA a deployment as the trigger for this skill.
 - When local browser automation is needed, prefer this skill over plain HTTP fetches because it can click, fill forms, inspect console/network logs, and preserve session state.
 
 Persistent headless Chromium daemon. First call auto-starts the server (~3s).

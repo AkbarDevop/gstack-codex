@@ -1,0 +1,8 @@
+interface:
+  display_name: "Pre-Landing Review"
+  short_description: "Audit a diff for real production risk"
+  brand_color: "#B91C1C"
+  default_prompt: "Use $review to audit this branch against the default branch and flag production-grade issues."
+
+policy:
+  allow_implicit_invocation: true

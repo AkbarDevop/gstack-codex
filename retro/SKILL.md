@@ -11,24 +11,24 @@ allowed-tools:
   - Glob
 ---
 
-# /retro — Weekly Engineering Retrospective
+# Retro — Weekly Engineering Retrospective
 
 ## Codex Port Notes
 
-- Codex does not have Claude slash commands. Treat requests like "run retro", "weekly retrospective", or "analyze shipping velocity" as invocation.
+- Codex does not use slash commands. Treat requests like "run retro", "weekly retrospective", or "analyze shipping velocity" as invocation.
 
-Generates a comprehensive engineering retrospective analyzing commit history, work patterns, and code quality metrics. Designed for a senior IC/CTO-level builder using Claude Code as a force multiplier.
+Generates a comprehensive engineering retrospective analyzing commit history, work patterns, and code quality metrics for builders using Codex heavily.
 
 ## User-invocable
-When the user types `/retro`, run this skill.
+Run this skill when the user asks for a retrospective, shipping analysis, or weekly/monthly engineering review.
 
 ## Arguments
-- `/retro` — default: last 7 days
-- `/retro 24h` — last 24 hours
-- `/retro 14d` — last 14 days
-- `/retro 30d` — last 30 days
-- `/retro compare` — compare current window vs prior same-length window
-- `/retro compare 14d` — compare with explicit window
+- `retro` — default: last 7 days
+- `retro 24h` — last 24 hours
+- `retro 14d` — last 14 days
+- `retro 30d` — last 30 days
+- `retro compare` — compare current window vs prior same-length window
+- `retro compare 14d` — compare with explicit window
 
 ## Instructions
 
@@ -36,42 +36,51 @@ Parse the argument to determine the time window. Default to 7 days if no argumen
 
 **Argument validation:** If the argument doesn't match a number followed by `d`, `h`, or `w`, the word `compare`, or `compare` followed by a number and `d`/`h`/`w`, show this usage and stop:
 ```
-Usage: /retro [window]
-  /retro              — last 7 days (default)
-  /retro 24h          — last 24 hours
-  /retro 14d          — last 14 days
-  /retro 30d          — last 30 days
-  /retro compare      — compare this period vs prior period
-  /retro compare 14d  — compare with explicit window
+Usage: retro [window]
+  retro              — last 7 days (default)
+  retro 24h          — last 24 hours
+  retro 14d          — last 14 days
+  retro 30d          — last 30 days
+  retro compare      — compare this period vs prior period
+  retro compare 14d  — compare with explicit window
 ```
 
 ### Step 1: Gather Raw Data
 
-First, fetch origin to ensure we have the latest:
+First, resolve the repository's default branch. Use:
+
 ```bash
-git fetch origin main --quiet
+gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name'
+git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@'
+```
+
+If both fail, fall back to `main`. Store the result as `<base-branch>`.
+
+Then fetch origin to ensure we have the latest:
+```bash
+git fetch origin <base-branch> --quiet
 ```
 
 Run ALL of these git commands in parallel (they are independent):
 
 ```bash
 # 1. All commits in window with timestamps, subject, hash, files changed, insertions, deletions
-git log origin/main --since="<window>" --format="%H|%ai|%s" --shortstat
+git log origin/<base-branch> --since="<window>" --format="%H|%ai|%s" --shortstat
 
 # 2. Per-commit test vs total LOC breakdown (single command, parse output)
 #    Each commit block starts with COMMIT:<hash>, followed by numstat lines.
 #    Separate test files (matching test/|spec/|__tests__/) from production files.
-git log origin/main --since="<window>" --format="COMMIT:%H" --numstat
+git log origin/<base-branch> --since="<window>" --format="COMMIT:%H" --numstat
 
 # 3. Commit timestamps for session detection and hourly distribution
 #    Use TZ=America/Los_Angeles for Pacific time conversion
-TZ=America/Los_Angeles git log origin/main --since="<window>" --format="%at|%ai|%s" | sort -n
+TZ=America/Los_Angeles git log origin/<base-branch> --since="<window>" --format="%at|%ai|%s" | sort -n
 
 # 4. Files most frequently changed (hotspot analysis)
-git log origin/main --since="<window>" --format="" --name-only | grep -v '^$' | sort | uniq -c | sort -rn
+git log origin/<base-branch> --since="<window>" --format="" --name-only | grep -v '^$' | sort | uniq -c | sort -rn
 
 # 5. PR numbers from commit messages (extract #NNN patterns)
-git log origin/main --since="<window>" --format="%s" | grep -oE '#[0-9]+' | sed 's/^#//' | sort -n | uniq | sed 's/^/#/'
+git log origin/<base-branch> --since="<window>" --format="%s" | grep -oE '#[0-9]+' | sed 's/^#//' | sort -n | uniq | sed 's/^/#/'
 ```
 
 ### Step 2: Compute Metrics
@@ -173,11 +182,11 @@ If the time window is 14 days or more, split into weekly buckets and show trends
 
 ### Step 10: Streak Tracking
 
-Count consecutive days with at least 1 commit to origin/main, going back from today:
+Count consecutive days with at least 1 commit to `origin/<base-branch>`, going back from today:
 
 ```bash
 # Get all unique commit dates (Pacific time) — no hard cutoff
-TZ=America/Los_Angeles git log origin/main --format="%ad" --date=format:"%Y-%m-%d" | sort -u
+TZ=America/Los_Angeles git log origin/<base-branch> --format="%ad" --date=format:"%Y-%m-%d" | sort -u
 ```
 
 Count backward from today — how many consecutive days have at least one commit? This queries the full history so streaks of any length are reported accurately. Display: "Shipping streak: 47 consecutive days"
@@ -314,7 +323,7 @@ Small, practical, realistic for a very busy person. Each must be something that 
 
 ## Compare Mode
 
-When the user runs `/retro compare` (or `/retro compare 14d`):
+When the user runs `retro compare` (or `retro compare 14d`):
 
 1. Compute metrics for the current window (default 7d) using `--since="7 days ago"`
 2. Compute metrics for the immediately prior same-length window using both `--since` and `--until` to avoid overlap (e.g., `--since="14 days ago" --until="7 days ago"` for a 7d window)
@@ -335,7 +344,7 @@ When the user runs `/retro compare` (or `/retro compare 14d`):
 ## Important Rules
 
 - ALL narrative output goes directly to the user in the conversation. The ONLY file written is the `.context/retros/` JSON snapshot.
-- Use `origin/main` for all git queries (not local main which may be stale)
+- Use `origin/<base-branch>` for git queries, not a stale local branch
 - Convert all timestamps to Pacific time for display (use `TZ=America/Los_Angeles`)
 - If the window has zero commits, say so and suggest a different window
 - Round LOC/hour to nearest 50

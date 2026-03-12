@@ -1,0 +1,8 @@
+interface:
+  display_name: "CEO Plan Review"
+  short_description: "Founder-mode product pressure test"
+  brand_color: "#7C3AED"
+  default_prompt: "Use $plan-ceo-review to pressure-test this feature idea and find the stronger product direction."
+
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,8 @@
+interface:
+  display_name: "Retro"
+  short_description: "Analyze shipping velocity and patterns"
+  brand_color: "#1D4ED8"
+  default_prompt: "Use $retro to analyze the last 7 days of commits and summarize work patterns and shipping velocity."
+
+policy:
+  allow_implicit_invocation: true

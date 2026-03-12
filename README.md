@@ -19,6 +19,18 @@ Then restart Codex and use prompts like:
 - `Use browse to test the signup flow on localhost:3000.`
 - `Ship this branch if the checks pass.`
 
+## Closest Thing To Slash-Command Parity In Codex
+
+Codex does not currently give this repo first-class slash-command parity.
+
+The best practical replacement is:
+
+1. install `gstack-codex` globally
+2. add a project-level `AGENTS.md` that tells Codex to route tasks into these skills by intent
+3. name the skill directly when you want an explicit gear shift
+
+You can start from [examples/AGENTS.md](/Users/akbar/Desktop/gstack-codex/examples/AGENTS.md).
+
 ## Without gstack-codex
 
 - The agent stays in one blended mode for everything
@@ -101,6 +113,16 @@ You do not need special syntax, but naming the skill directly is the most reliab
 
 - `Run retro for the last 7 days.`
 - `Run retro compare 14d.`
+
+## Project Integration
+
+If you want the closest thing to the original repo's "teammates get the workflow too" behavior today:
+
+1. have each teammate install `gstack-codex` globally
+2. copy the routing guidance from [examples/AGENTS.md](/Users/akbar/Desktop/gstack-codex/examples/AGENTS.md) into the project's own `AGENTS.md`
+3. keep using direct skill names for the highest reliability
+
+This is the current best Codex-native approximation of the original `.claude/skills` project integration flow.
 
 ## How Codex invocation works
 
@@ -224,6 +246,16 @@ Nothing is added to your shell `PATH`. Nothing runs permanently in the backgroun
 - `review/checklist.md` is strongest for web apps, LLM-heavy products, and repos where structural bugs matter more than formatting concerns
 
 That is intentional. This project is trying to be sharp and useful, not bland and universal.
+
+## Limitations Outside This Repo's Control
+
+- Codex does not currently expose true slash-command parity like `/review` or `/ship`
+- Codex does not appear to expose a confirmed project-local skill discovery path equivalent to `.claude/skills`
+
+Those two gaps are tracked publicly:
+
+- [Support project-local install and teammate distribution parity](https://github.com/AkbarDevop/gstack-codex/issues/1)
+- [Need first-class explicit skill invocation parity in Codex](https://github.com/AkbarDevop/gstack-codex/issues/4)
 
 ## Development
 

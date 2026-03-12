@@ -310,8 +310,9 @@ The original `gstack` is a strong idea: explicit cognitive modes for planning, r
 
 ## Roadmap
 
-- make `ship` smarter about project-specific validation discovery
-- add more battle-tested review heuristics outside Rails and LLM-heavy apps
+- [Support project-local install and teammate distribution parity](https://github.com/AkbarDevop/gstack-codex/issues/1)
+- [Broaden review heuristics beyond Rails and LLM-heavy repos](https://github.com/AkbarDevop/gstack-codex/issues/2)
+- [Make ship workflow feel as battle-tested as original gstack](https://github.com/AkbarDevop/gstack-codex/issues/3)
 - expand `browse` docs with richer QA recipes
 - keep upstreaming the portable pieces back toward the original `gstack` where it makes sense
 

@@ -2,7 +2,7 @@
 
 **gstack-codex turns Codex from one generic coding agent into a team of specialists you can invoke by name or intent.**
 
-Six opinionated workflows for planning, review, shipping, browser QA, and engineering retrospectives, adapted from Garry Tan's original `gstack` for Claude Code and rebuilt around Codex's skill system.
+Six opinionated workflow skills for Codex. Plan review, code review, one-command shipping, browser automation, and engineering retrospectives.
 
 ## Quick Start
 
